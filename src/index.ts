@@ -1,0 +1,92 @@
+import { requireBasicAuth, requireBearer } from "./auth";
+import { FRONTEND_HTML } from "./frontend";
+import { runPoll } from "./poller";
+import { buildState } from "./state";
+import { upsertTelemetry } from "./db";
+import type { Env } from "./types";
+
+interface TelemetryPayload {
+  host: string;
+  location?: string;
+  cpu_pct: number;
+  cpu_count: number;
+  load_avg_1m: number;
+  mem_used_mb: number;
+  mem_total_mb: number;
+  disk_used_gb: number;
+  disk_total_gb: number;
+  uptime_s: number;
+  agent_version: string;
+}
+
+function isTelemetryPayload(v: unknown): v is TelemetryPayload {
+  if (typeof v !== "object" || v === null) return false;
+  const p = v as Record<string, unknown>;
+  return (
+    typeof p.host === "string" &&
+    typeof p.cpu_pct === "number" &&
+    typeof p.cpu_count === "number" &&
+    typeof p.mem_used_mb === "number" &&
+    typeof p.mem_total_mb === "number"
+  );
+}
+
+export default {
+  async fetch(req: Request, env: Env): Promise<Response> {
+    const url = new URL(req.url);
+
+    if (url.pathname === "/api/telemetry" && req.method === "POST") {
+      const denied = await requireBearer(req, env.TELEMETRY_TOKEN);
+      if (denied) return denied;
+      let payload: unknown;
+      try {
+        payload = await req.json();
+      } catch {
+        return new Response("invalid json", { status: 400 });
+      }
+      if (!isTelemetryPayload(payload)) return new Response("invalid payload", { status: 400 });
+      await upsertTelemetry(
+        env.DB,
+        {
+          host: payload.host,
+          location: payload.location ?? null,
+          cpuPct: payload.cpu_pct,
+          cpuCount: payload.cpu_count,
+          loadAvg1m: payload.load_avg_1m ?? 0,
+          memUsedMb: payload.mem_used_mb,
+          memTotalMb: payload.mem_total_mb,
+          diskUsedGb: payload.disk_used_gb ?? 0,
+          diskTotalGb: payload.disk_total_gb ?? 0,
+          uptimeS: payload.uptime_s ?? 0,
+          agentVersion: payload.agent_version ?? "unknown",
+        },
+        new Date().toISOString(),
+      );
+      return new Response(null, { status: 204 });
+    }
+
+    // Everything else is the private dashboard — gate it.
+    const denied = await requireBasicAuth(req, env.DASHBOARD_USER, env.DASHBOARD_PASSWORD);
+    if (denied) return denied;
+
+    if (url.pathname === "/api/state") {
+      const state = await buildState(env);
+      return Response.json(state);
+    }
+
+    if (url.pathname === "/api/poll-now" && req.method === "POST") {
+      await runPoll(env);
+      return new Response(null, { status: 204 });
+    }
+
+    if (url.pathname === "/") {
+      return new Response(FRONTEND_HTML, { headers: { "content-type": "text/html; charset=utf-8" } });
+    }
+
+    return new Response("not found", { status: 404 });
+  },
+
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(runPoll(env));
+  },
+} satisfies ExportedHandler<Env>;

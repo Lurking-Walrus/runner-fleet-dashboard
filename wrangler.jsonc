@@ -1,0 +1,34 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "runner-fleet-dashboard",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-27",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "runner-fleet-dashboard",
+      "database_id": "3a28c2fd-2cdf-422f-8217-3877010e2888",
+      "migrations_dir": "./migrations"
+    }
+  ],
+  "triggers": {
+    "crons": ["*/2 * * * *"]
+  },
+  "vars": {
+    // Comma-separated "org:<name>" / "repo:<owner>/<name>" scopes to poll for runners.
+    // Personal-account self-hosted runners only exist per-repo, so list them explicitly.
+    "POLL_SCOPES": "org:Lurking-Walrus",
+    // How many minutes a job can occupy a runner before it's flagged as long-running.
+    "LONG_RUNNING_JOB_MINUTES": "60",
+    // How many minutes telemetry can go stale before it's flagged.
+    "TELEMETRY_STALE_MINUTES": "10",
+    // How many minutes a runner can sit offline before it's flagged as stuck
+    // (as opposed to a one-off blip). Re-flagged hourly for as long as it stays offline.
+    "OFFLINE_STUCK_MINUTES": "15"
+  }
+}

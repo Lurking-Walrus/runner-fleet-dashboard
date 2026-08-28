@@ -1,0 +1,27 @@
+name: Auto-merge
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  enable-auto-merge:
+    timeout-minutes: 10
+    # Inlined rather than calling Lurking-Walrus/.github-private's reusable
+    # workflow: this repo is public and that one is private, so the call would
+    # not reliably resolve. Kept behaviourally identical to it.
+    #
+    # The head-repo check is load-bearing and must not be relaxed: it restricts
+    # auto-merge to same-repo branches, so a fork PR from a stranger can never
+    # queue itself for merge. `--auto` still waits for required checks.
+    if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enable auto-merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr merge --auto --squash "${{ github.event.pull_request.html_url }}"

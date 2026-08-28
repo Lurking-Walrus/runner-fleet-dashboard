@@ -1,0 +1,35 @@
+async function timingSafeEqual(a: string, b: string): Promise<boolean> {
+  const enc = new TextEncoder();
+  const aBytes = enc.encode(a);
+  const bBytes = enc.encode(b);
+  // Hash both first so comparison length never leaks the real secret's length.
+  const [aHash, bHash] = await Promise.all([
+    crypto.subtle.digest("SHA-256", aBytes),
+    crypto.subtle.digest("SHA-256", bBytes),
+  ]);
+  return crypto.subtle.timingSafeEqual(aHash, bHash);
+}
+
+export async function requireBasicAuth(req: Request, user: string, password: string): Promise<Response | null> {
+  const header = req.headers.get("Authorization");
+  if (header?.startsWith("Basic ")) {
+    const decoded = atob(header.slice(6));
+    const sep = decoded.indexOf(":");
+    const gotUser = decoded.slice(0, sep);
+    const gotPass = decoded.slice(sep + 1);
+    if ((await timingSafeEqual(gotUser, user)) && (await timingSafeEqual(gotPass, password))) {
+      return null;
+    }
+  }
+  return new Response("Authentication required", {
+    status: 401,
+    headers: { "WWW-Authenticate": 'Basic realm="runner-fleet-dashboard"' },
+  });
+}
+
+export async function requireBearer(req: Request, token: string): Promise<Response | null> {
+  const header = req.headers.get("Authorization");
+  const got = header?.startsWith("Bearer ") ? header.slice(7) : "";
+  if (got && (await timingSafeEqual(got, token))) return null;
+  return new Response("Unauthorized", { status: 401 });
+}

@@ -1,0 +1,4 @@
+GH_PAT=paste-a-token-with-actions-read-and-runners-read-scope
+DASHBOARD_USER=dev
+DASHBOARD_PASSWORD=pick-a-local-dev-password
+TELEMETRY_TOKEN=pick-a-local-dev-token

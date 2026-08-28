@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  typecheck:
+    timeout-minutes: 10
+    name: Type check
+    # Hardcoded hosted, not the org's canonical routing expression. This repo is
+    # PUBLIC: per Lurking-Walrus/.github-private docs/CI-RUNNER-ROUTING.md a
+    # public repo always runs on ubuntu-latest, because a fork PR would
+    # otherwise get arbitrary code execution on self-hosted hardware. Public
+    # repos also get free hosted minutes, so there is nothing to gain. Do not
+    # "restore" the routing expression here — it could only ever evaluate to
+    # this same value, while implying the fleet is one config flip away.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24"
+      - run: npm ci
+      - run: npm run types
+      - run: npm run typecheck

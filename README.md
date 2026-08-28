@@ -1,0 +1,94 @@
+# runner-fleet-dashboard
+
+An auth-gated status page for a self-hosted GitHub Actions runner fleet: where
+each runner lives, what it's running (with links to the run and PR), live
+CPU/RAM/disk for the host it's on, and a feed of issues (offline runners,
+failed jobs, long-running jobs, stale telemetry).
+
+Cloudflare Worker (cron poller + API + HTML frontend) backed by D1, plus a
+zero-dependency Node telemetry agent you run on each physical host.
+
+**The code is public; a deployment is not.** Every route is behind HTTP Basic
+Auth or a bearer token, and every credential — the GitHub PAT, the dashboard
+password, the telemetry token — is a Worker secret set with `wrangler secret
+put`, never a file in this repo. Host names in the examples below are
+placeholders (`ci-host-a`, `ci-host-b`); a real deployment's host labels come
+from each agent's own uncommitted `.env` via `LOCATION`.
+
+## How it works
+
+- A cron trigger polls the GitHub API every 2 minutes: runner status per
+  configured scope, then cross-references busy runners against in-progress
+  workflow runs to find the repo/workflow/job/PR each one is doing.
+- Runners are grouped into a "pool" (one physical host) by stripping a
+  trailing `-N` from the runner name — `ci-host-a-linux-3` groups
+  under `ci-host-a-linux`.
+- The `agent/` script runs on each physical host and pushes CPU/RAM/disk to
+  `/api/telemetry`, keyed by that same pool name.
+- The dashboard (HTTP Basic Auth-gated) polls `/api/state` every 20s.
+
+## Deploy
+
+```bash
+npm install
+npx wrangler d1 migrations apply runner-fleet-dashboard --remote
+```
+
+Set secrets (run these yourself — never paste tokens through an agent):
+
+```bash
+wrangler secret put GH_PAT              # fine-grained PAT, see below
+wrangler secret put DASHBOARD_USER
+wrangler secret put DASHBOARD_PASSWORD
+wrangler secret put TELEMETRY_TOKEN     # any long random string; agents send this as a bearer token
+```
+
+**`GH_PAT` scopes needed** (fine-grained PAT, `kornsour` account):
+- Organization permissions on `Lurking-Walrus`: **Self-hosted runners: Read-only**, **Administration: Read-only** (to list org repos)
+- Repository permissions, for every repo the fleet might run jobs on (or "All repositories"): **Actions: Read-only**, **Metadata: Read-only**
+- If you add personal-repo scopes to `POLL_SCOPES` below: same repo permissions on those `kornsour/*` repos, plus **Self-hosted runners: Read-only** (repo-level, since personal accounts have no org-wide runner API)
+
+```bash
+npx wrangler deploy
+```
+
+## Configure what gets polled
+
+`wrangler.jsonc` → `vars.POLL_SCOPES`, comma-separated:
+
+```
+org:Lurking-Walrus,repo:kornsour/gh-automation
+```
+
+Currently only `org:Lurking-Walrus` is set — the org's the only place with
+self-hosted runners as of 2026-08-27 (`gh api orgs/Lurking-Walrus/actions/runners`).
+Add `repo:kornsour/<name>` entries here if/when personal-account runners come
+back; `gh api repos/kornsour/<repo>/actions/runners` tells you which repos
+have any.
+
+## Install the telemetry agent
+
+See [`agent/README.md`](./agent/README.md). One agent per physical machine,
+whatever it runs — a Linux box, WSL on Windows, or a Mac hosting containers.
+
+## Local development
+
+```bash
+npm install
+npx wrangler d1 migrations apply runner-fleet-dashboard --local
+cp .dev.vars.example .dev.vars   # fill in a local GH_PAT (e.g. `gh auth token`) and dev secrets
+npx wrangler dev --test-scheduled
+curl -u dev:<DASHBOARD_PASSWORD> -X POST http://localhost:8787/api/poll-now   # trigger a poll on demand
+```
+
+## Known limitations (v1)
+
+- GitHub API polling only sees org-level runners and any `repo:`-scoped
+  entries you add to `POLL_SCOPES` — it does not auto-discover repo-level
+  runners across every repo in either account (that would mean scanning
+  dozens of repos every 2 minutes for no reason, since almost none of them
+  have a repo-level runner registered).
+- Telemetry is per physical host, not per runner process — if two runners on
+  the same box are both busy, they share the same CPU/RAM/disk numbers,
+  because they're literally sharing the same hardware.
+- No historical charts yet, just a live snapshot and a 100-event recent feed.
