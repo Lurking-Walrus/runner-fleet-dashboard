@@ -24,7 +24,7 @@ jobs:
     # self-hosted fleet. The private predecessor of this repo had to override
     # that exemption because hosted minutes were billing-blocked on private
     # repos; a public repo gets them free, so the override is gone.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest # allow-bare-runner: holds a Cloudflare API token, which is deliberately kept off the self-hosted fleet
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}

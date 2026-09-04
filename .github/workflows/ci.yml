@@ -21,7 +21,7 @@ jobs:
     # repos also get free hosted minutes, so there is nothing to gain. Do not
     # "restore" the routing expression here — it could only ever evaluate to
     # this same value, while implying the fleet is one config flip away.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest # allow-bare-runner: public repository: the canonical expression could only ever evaluate to this, and a fork PR must never reach the fleet
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7

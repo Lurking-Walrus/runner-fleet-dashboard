@@ -19,7 +19,7 @@ jobs:
     # auto-merge to same-repo branches, so a fork PR from a stranger can never
     # queue itself for merge. `--auto` still waits for required checks.
     if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest # allow-bare-runner: public repository: a fork PR must never reach the self-hosted fleet, and hosted minutes are free here
     steps:
       - name: Enable auto-merge
         env:
