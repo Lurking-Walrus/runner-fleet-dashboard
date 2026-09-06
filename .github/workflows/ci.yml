@@ -1,7 +1,15 @@
 name: CI
 
+# `strict_required_status_checks_policy` ("require branches to be up to date
+# before merging") was turned off org-wide - it forced every open PR to
+# update-and-re-run CI after any merge, which is quadratic cost on a 4-6 slot
+# self-hosted fleet. The push trigger below is the replacement safety net:
+# main is now verified AFTER merge instead of before. This repo is public, so
+# the push run lands on ubuntu-latest like the PR run, at no fleet cost.
 on:
   pull_request:
+  push:
+    branches: [main]
 
 permissions:
   contents: read
